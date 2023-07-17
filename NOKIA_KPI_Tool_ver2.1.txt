@@ -1,0 +1,1085 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jun  8 00:42:20 2021
+
+@author: vatsalgu
+"""
+
+
+
+tech_names={
+    "G":"GSM",
+    "P":"U19",
+    "U":"U21",
+    "E":"L6",
+    "D":"L7",
+    "B":"L19",
+    "L":"L21",
+    "T":"L25",
+    "F":"AWS3",
+    "Z":"IOT",
+    "Y":"IOT",
+    "K":"5G NR6",
+    "A":"5G NR25",
+    "N":"N260",
+    "M":"MMW"
+}
+
+sector_names={
+    "1":"A",
+    "2":"B",
+    "3":"G",
+    "4":"D",
+    "5":"E",
+    "6":"Z",
+    "7":"7th sector",
+    "8":"8th sector",
+    "9":"9th sector",
+}
+
+carrier_names={
+    "1":" 1C",
+    "2":" 2C",
+    "3":" 3C"
+}
+
+duration_meaning={
+    'KPI Hour1 Validated':'1',
+    'KPI Hour2 Validated':'2',
+    'KPI Hour4 Validated':'4',
+    'KPI Hour8 Validated':'8',
+    'KPI Next Day Validated':'24',
+    'KPI Next 2 Days Validated':'48'
+
+}
+
+def update_cell_value(cell_val):
+    val = list(cell_val)
+    return "%s%s (%s)" % (tech_names[val[0]], carrier_names[val[-1]], sector_names[val[-2]])
+
+def update_cell_value_ms(cell_val): #minus sector
+    val = list(cell_val)
+    orig_return =  "%s%s (%s)" % (tech_names[val[0]], carrier_names[val[-1]], sector_names[val[-2]])
+
+    # return orig_return
+    sectors_allowed = ['L19', 'L25', '5G']
+    if orig_return.split(' ')[0] in sectors_allowed:
+        return ' '.join(orig_return.split(' ')[:2])
+    else:
+        return ' '.join(orig_return.split(' ')[:1])
+
+def create_all_antennas(df, site_totaltechs_list): #For total
+    grouped = df.groupby('SITE')
+    groups = list(grouped.groups.keys())
+
+    for group in groups:
+        existing = site_totaltechs_list.get(group, [])
+        site_totaltechs_list[group] = list(set(existing + grouped.get_group(group).CELL.apply(lambda x : update_cell_value_ms(x)).tolist())) 
+        #site_totaltechs_list[group] = list(set(grouped.get_group(group).CELL.apply(lambda x : update_cell_value_ms(x)).tolist()))
+
+    return site_totaltechs_list
+
+def generate_lte_remarks(site_list,fdataset,col_dict_df):
+    final_output = {}
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        final_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["Cell Availability Rate"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 Cell availability rate at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        final_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["Cell Availability Rate"]] > 0 and row[col_dict_df["Cell Availability Rate"]] < 98:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["Cell availability rate degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site]) 
+        
+    main_output = {}    
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["E-RAB Drop Rate Active Users(GCR)_L16"]] > 2:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["E-RAB Drop Rate Active Users GCR_L16 degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site]) 
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["LTE Data Access Failure Rate GCR"]] > 2:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["LTE Data Access Failure Rate GCR degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if (row[col_dict_df["VoLTE Access Failures"]] > 10 and row[col_dict_df["VoLTE Access Failure Rate"]] > 2):
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["VoLTE Access Failure Rate degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if (row[col_dict_df["Total VoLTE Drops L16"]] > 10 and row[col_dict_df["VoLTE Drop Rate (GCR) L16"]] > 2):
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["VoLTE Drop Rate GCR L16 degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["DL Traffic Volume (MB)"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 DL Traffic Volume MB at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["VoLTE Erlangs"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 VoLTE Erlangs at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+            
+#Can be neglected for now -->
+    
+        # main_output = {}    
+        # for site in site_list:
+        #     main_output[site] = []
+        #     for row in dataset.iloc:
+        #         if row[4] == site:
+        #             if row[18] > -3:
+        #                 val = update_cell_value(row[6])
+        #                 main_output[site].append(val)
+        #     if len(main_output[site]) > 0:
+        #                 main_output[site] = ["Average RTWP Rx Antenna 1 degraded at %s" % str(", ".join(main_output[site]))]
+        #     final_output[site].append(main_output[site])
+        
+        # main_output = {} 
+        # for site in site_list:
+        #     main_output[site] = []
+        #     for row in dataset.iloc:
+        #         if row[4] == site:
+        #             if row[20] > -3:
+        #                 val = update_cell_value(row[6])
+        #                 main_output[site].append(val)
+        #     if len(main_output[site]) > 0:
+        #                 main_output[site] = ["Average RTWP Rx Antenna 2 degraded at %s" % str(", ".join(main_output[site]))]
+        #     final_output[site].append(main_output[site])
+        
+        # main_output = {}
+        # for site in site_list:
+        #     main_output[site] = []
+        #     for row in dataset.iloc:
+        #         if row[4] == site:
+        #             if row[19] > -3:
+        #                 val = update_cell_value(row[6])
+        #                 main_output[site].append(val)
+        #     if len(main_output[site]) > 0:
+        #                 main_output[site] = ["Average RTWP Rx Antenna 3 degraded at %s" % str(", ".join(main_output[site]))]
+        #     final_output[site].append(main_output[site])
+        
+        
+        # main_output = {}
+        # for site in site_list:
+        #     main_output[site] = []
+        #     for row in dataset.iloc:
+        #         if row[4] == site:
+        #             if row[21] > -3:
+        #                 val = update_cell_value(row[6])
+        #                 main_output[site].append(val)
+        #     if len(main_output[site]) > 0:
+        #                 main_output[site] = ["Average RTWP Rx Antenna 4 degraded at %s" % str(", ".join(main_output[site]))]
+        #     final_output[site].append(main_output[site])
+    
+#<-- Can be neglected for now.
+
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["Inter-Frequency HO Success Rate"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 Inter Frequency HO Success Rate at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["Intra-Frequency HO Success Rate"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 Intra Frequency HO Success Rate at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["RACH setup failure rate"]] > 20:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["RACH setup failure rate degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    #main_output = {}
+    #for site in site_list:
+    #    main_output[site] = []
+    #    for row in fdataset.iloc:
+    #        if row[col_dict_df["SITE"]] == site:
+    #            if row[col_dict_df["RRC_CONNECTED_UE_AVG_M8051C55_"]] == 0:
+    #                val = update_cell_value(row[col_dict_df["CELL"]])
+    #                main_output[site].append(val)
+    #    if len(main_output[site]) > 0:
+    #        main_output[site] = ["0 RRC CONNECTED UE_AVG at %s" % str(", ".join(main_output[site]))]
+    #    final_output[site].append(main_output[site])
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["RRC_CONNECTED_UE_MAX_M8051C56_"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 RRC CONNECTED UE_MAX at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["UL Traffic Volume (MB)"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 UL Traffic Volume MB at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+        
+        
+    for key, value in final_output.items():
+        output = []
+        for line in value:
+            output += line
+        final_output[key] = ["\n".join(output)]
+
+    return final_output
+
+
+def generate_5g_remarks(site_list,fdataset,col_dict_df):
+    final_output = {}
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        final_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["NR DL Traffic Vol - MAC (MB)"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 NR DL Traffic Vol - MAC (MB) at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site]) 
+        
+    main_output = {}    
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["NR UL Traffic Vol - MAC (MB)"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 NR UL Traffic Vol - MAC (MB) at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site]) 
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["OEM NR ACC NSA Accessibility (NR_5020d)"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 NR NSA Accessibility (NR_5020d) at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["OEM NR ACC NSA Accessibility (NR_5020d)"]] > 0 and row[col_dict_df["OEM NR ACC NSA Accessibility (NR_5020d)"]] < 98:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["NR NSA Accessibility (NR_5020d) degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+        
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["OEM NR AVL Cell Availability (NR_5150a)"]] == 0:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["0 NR Cell Availability (NR_5150a) at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+    
+    main_output = {}
+    for site in site_list:
+        main_output[site] = []
+        for row in fdataset.iloc:
+            if row[col_dict_df["SITE"]] == site:
+                if row[col_dict_df["OEM NR AVL Cell Availability (NR_5150a)"]] > 0 and row[col_dict_df["OEM NR AVL Cell Availability (NR_5150a)"]] < 98:
+                    val = update_cell_value(row[col_dict_df["CELL"]])
+                    main_output[site].append(val)
+        if len(main_output[site]) > 0:
+            main_output[site] = ["NR Cell Availability (NR_5150a) degraded at %s" % str(", ".join(main_output[site]))]
+        final_output[site].append(main_output[site])
+        
+        
+    for key, value in final_output.items():
+        output = []
+        for line in value:
+            output += line
+        final_output[key] = ["\n".join(output)]
+
+    return final_output
+
+
+
+
+import pandas as pd
+import os
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill,Alignment
+# from glob import glob
+# from openpyxl.cell import Cell
+
+# file_name_rem=input("Enter the remarks file name: ")
+file_name_rem=''
+for f_name in os.listdir(os.getcwd()):
+    if f_name.endswith('Remarks.xlsx'):
+        file_name_rem=f_name
+        print(file_name_rem)
+        break
+    
+remarks_df=pd.read_excel(file_name_rem)
+cross_check = ["L19 1C", "L19 2C", "L25 1C", "L25 2C"]
+
+site_totaltechs_list={}
+for file_name in os.listdir(os.getcwd()):
+    if file_name.endswith('hr.xlsx'):
+        df = pd.read_excel(file_name)
+        site_totaltechs_list = create_all_antennas(df, site_totaltechs_list)    
+
+manual_dict={}
+for key in site_totaltechs_list:
+
+    site_info = remarks_df.loc[remarks_df['Site ID'] == key, 'New Tech']
+
+    if len(site_info):
+        try:
+            new_tech = [tech.strip() for tech in site_info.to_list()[0].split(',')] # New tech
+            total = site_totaltechs_list[key]
+            leftout = [tech for tech in cross_check if tech not in (total+new_tech)]
+            if leftout:
+                print('Need to check manually for {} : {}'.format(key, leftout))
+                leftout=','.join(leftout)
+                manual_dict[key]=leftout
+
+            locked_tech = [tech for tech in new_tech if tech not in total]
+            #locked_tech = [tech for tech in locked_tech if not tech.startswith('5G')]
+            remarks_df.loc[remarks_df['Site ID'] == key, 'Locked Tech'] = ', '.join(list(locked_tech))
+
+        except Exception as e:
+            pass
+
+lock_techs = {x[0] : x[1] for x in remarks_df.loc[:, ['Site ID', 'Locked Tech']].fillna('').to_dict('split')['data']}
+
+
+wb=load_workbook(file_name_rem)
+ws=wb.active
+#ws=wb["Sheet1"]
+# ws2=wb["Daily"]
+
+neongreenFill=PatternFill(start_color='39ff14', #for pass sites
+                   end_color='39ff14',
+                   fill_type='solid')
+goldFill=PatternFill(start_color='ffd700', #for pending sites
+                   end_color='ffd700',
+                   fill_type='solid')
+redFill=PatternFill(start_color='ff3333', #for fail sites
+                   end_color='ff3333',
+                   fill_type='solid')
+orangeFill=PatternFill(start_color='ff8c00', #for overdue sites
+                   end_color='ff8c00',
+                   fill_type='solid')
+
+dim1=ws.dimensions
+#ws.insert_cols(ord(dim1[3])+1-64+1)
+nextcol6=chr(ord(dim1[3])+1+1+1+1+1+1) #for locked techs
+ws.insert_cols(ord(dim1[3])+1-64+1+1+1+1+1+1) #for locked techs
+ws[nextcol6+'1']='Locked Tech'
+# dim1=''
+# dim1=ws.dimensions
+# col_dict_rem={}
+# j=0
+# for i in range(65,ord(dim1[3])+1): #remarks file column names dictionary
+#     col_dict_rem[ws[chr(i)+'1'].value]=j
+#     j+=1
+
+# ws.insert_cols(col_dict_rem['New Tech']+2) #inserting a column after 'New Tech'
+# ws[str(chr(col_dict_rem['New Tech']+65+1)+str('1'))]='Locked Tech' #this new column is 'Locked Tech'
+
+# dim1=''
+# dim1=ws.dimensions
+# col_dict_rem={} #rerunning because new column is now added
+# j=0
+# for i in range(65,ord(dim1[3])+1): #remarks file column names dictionary
+#     col_dict_rem[ws[chr(i)+'1'].value]=j
+#     j+=1
+
+# dim1=''
+# dim1=ws.dimensions #rerunning because new column is now added
+nextcol1=chr(ord(dim1[3])+1) #for LTE new tech remarks
+nextcol2=chr(ord(dim1[3])+1+1) #for 5G new tech remarks
+nextcol3=chr(ord(dim1[3])+1+1+1) #for existing tech remarks
+nextcol4=chr(ord(dim1[3])+1+1+1+1) #for total tech remarks
+nextcol5=chr(ord(dim1[3])+1+1+1+1+1) #Blank column
+#nextcol5=chr(ord(dim1[3])+1+1+1+1+1+1) #for locked techs
+nextcol7=chr(ord(dim1[3])+1+1+1+1+1+1+1) #for need to check manual sites
+trows1=int(dim1[4::])
+# ws.insert_cols(ord(dim1[3])+1-64+1) #for LTE new tech remarks
+# ws.insert_cols(ord(dim1[3])+1-64+1+1) #for 5G new tech remarks
+# ws.insert_cols(ord(dim1[3])+1-64+1+1+1) #for existing tech remarks
+# ws.insert_cols(ord(dim1[3])+1-64+1+1+1+1) #for total tech remarks
+# ws.insert_cols(ord(dim1[3])+1-64+1+1+1+1+1) #Blank column
+#ws.insert_cols(ord(dim1[3])+1-64+1+1+1+1+1+1) #for locked techs
+ws.insert_cols(ord(dim1[3])+1-64+1+1+1+1+1+1+1) #for need to check manual sites
+ws[nextcol1+'1']='New Tech LTE KPI Validation Remarks'
+ws[nextcol2+'1']='New Tech 5G KPI Validation Remarks'
+ws[nextcol3+'1']='Existing Tech KPI Validation Remarks'
+ws[nextcol4+'1']='Total Tech KPI Validation Remarks'
+ws[nextcol5+'1']=''
+#ws[nextcol5+'1']='Locked Tech'
+ws[nextcol7+'1']='Need to check manually for the below techs'
+for i in range (2,trows1+1):
+    ws[nextcol1+str(i)].value='Site ID not found'
+    ws[nextcol2+str(i)].value='Site ID not found'
+    ws[nextcol3+str(i)].value='Site ID not found'
+    ws[nextcol4+str(i)].value='Site ID not found'
+
+dim2='' #ONLY for the purpose of calculating col_dict_rem
+dim2=ws.dimensions
+col_dict_rem={}
+j=0
+for i in range(65,ord(dim2[3])+1): #remarks file column names dictionary
+    col_dict_rem[ws[chr(i)+'1'].value]=j
+    j+=1
+
+
+ntc=chr(65+int(col_dict_rem['New Tech'])) #newtechcolumn
+ltc=chr(65+int(col_dict_rem['Locked Tech'])) #lockedtech column
+mtc=chr(65+int(col_dict_rem['Need to check manually for the below techs'])) #manuallockedtechcheck column
+site_techs_list={}
+ns_string='' #site techs after new-locked to be converted into string
+for i in range (2,trows1+1):
+    ns=str(ws[ntc+str(i)].value).split(', ')
+    for j in ns: #to remove GSM and UMTS techs from further processing in the system as we aren't doing KPI monitoring of these techs as of now
+       if j=='GSM' or j=='U19' or j=='U21':
+           ns.remove(j)
+    ls=str(ws[ltc+str(i)].value).split(', ')
+    for a in ls:
+        for b in ns:
+            if a==b:
+                ns.remove(a)
+    ns_string=', '.join(ns)
+    site_techs_list[ws['A'+str(i)].value]=ns_string
+    ns_string=''
+
+# Fill locked tech column from lock_techs
+for kl,vl in lock_techs.items():
+    for i in range(2,trows1+1):
+        if kl==ws[str(chr(col_dict_rem['Site ID']+65))+str(i)].value:
+            if vl=='' or vl=='GSM' or vl=='U19' or vl=='U21':
+                continue
+            else:
+                ws[ltc+str(i)]=vl
+# Fill Need to check manually for the below techs column from manual_dict
+for km,vm in manual_dict.items():
+    for i in range(2,trows1+1):
+        if km==ws[str(chr(col_dict_rem['Site ID']+65))+str(i)].value:
+            if vm=='':
+                continue
+            else:
+                ws[mtc+str(i)]=str(vm)
+
+
+# for file_name in glob(fr'{file_path}\*.xlsx'):
+for file_name in os.listdir(os.getcwd()):
+    if file_name.endswith('hr.xlsx'):
+        file_duration=''
+        for i in file_name: #to determine which file is for what duration KPI
+            if (i.isdigit()==1):
+                file_duration+=i
+        file_duration=int(file_duration)
+        
+        dataset = pd.DataFrame()
+        dataset = pd.read_excel(file_name)  #excel file import
+        dataset.sort_values(by=['SITE','CELL'], inplace=True, ignore_index=True)
+        # dataset = pd.read_csv(file_name)  #csv file import
+        col_dict_df={}
+        ind=0
+        for i in list(dataset.columns): #to determine site file column names dictionary
+            col_dict_df[i]=ind
+            ind+=1
+        site_list = list(set(list(dataset.iloc[:, col_dict_df['SITE']].values)))
+        
+        #new tech filter
+        
+        dataset2=dataset
+        for i in range (0,len(dataset2)):
+            dataset2=dataset2.drop(i,axis=0)
+        dataset3=dataset
+        for i in range (0,len(dataset3)):
+            dataset3=dataset3.drop(i,axis=0)
+        
+        for site in site_list:
+            nt=site_techs_list[site].split(', ') #list of new techs-locked techs for that particular site
+            for s in nt:
+                if s=='AWS3':
+                    newtech=s[0:4]
+                elif s=='5G NR6':
+                    newtech=s[0:6]
+                elif s=='5G NR25':
+                    newtech=s[0:7]
+                else:
+                    newtech=s[0:3]
+                newtech=newtech.strip()
+                if s.find('1C',0,len(s))!=-1:
+                    c1=s[-2::]
+                    for k,v in carrier_names.items():
+                        if v[1::]==c1:
+                            c1=k
+                if s.find('2C',0,len(s))!=-1:
+                    c2=s[-2::]
+                    for k,v in carrier_names.items():
+                        if v[1::]==c2:
+                            c2=k
+                for i in range (0,len(dataset)):
+                    if dataset['SITE'][i]==site:
+                        for ki,vi in tech_names.items():   
+                            if vi==newtech:
+                                if s.find('1C',0,len(s))!=-1:
+                                    if (dataset['CELL'][i][0]==ki and dataset['CELL'][i][-1]==c1):
+                                        dataset2=dataset2.append(dataset.iloc[i,:])
+                                elif s.find('2C',0,len(s))!=-1:
+                                    if (dataset['CELL'][i][0]==ki and dataset['CELL'][i][-1]==c2):
+                                        dataset2=dataset2.append(dataset.iloc[i,:])
+                                else:
+                                    if dataset['CELL'][i][0]==ki:
+                                        dataset2=dataset2.append(dataset.iloc[i,:])
+     
+        #Now dataset2 would be referred to generate remarks for new techs
+        #Now dataset3 would be referred to generate remarks for existing techs
+        
+        dataset3=pd.concat([dataset,dataset2]).drop_duplicates(keep=False)
+        #Now dataset would be referred to generate remarks for all techs available in the site file
+        
+        if (file_name.find('LTE')!=-1):
+        
+            final_output=generate_lte_remarks(site_list,dataset2,col_dict_df)
+                
+            #print(final_output)
+            df = pd.DataFrame.from_dict(final_output, orient="Index")
+            k=''
+            for i in list(df.index):
+                for j in range(2,trows1+1):
+                    if i == ws['A'+str(j)].value:
+                        if (str((df.loc[i,0]))!='') and (ws[nextcol1+str(j)].value=='Site ID not found') or (ws[nextcol1+str(j)].value=='') or (ws[nextcol1+str(j)].value=='None'): # or (ws[nextcol1+str(j)].value.find('issue was observed')!=-1):
+                            ws[nextcol1+str(j)] = 'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, the following issues were observed:'
+                            ws[nextcol1+str(j)] = ws[nextcol1+str(j)].value+'\n'+str((df.loc[i,0]))
+                        if str((df.loc[i,0]))=='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value: #check if blank or None
+                                                # ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                # ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                if (ws[nextcol1+str(j)].value=='Site ID not found') or (ws[nextcol1+str(j)].value=='') or (ws[nextcol1+str(j)].value=='None'):
+                                                    ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                    ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                    ws[nextcol1+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                                elif (ws[nextcol1+str(j)].value.find('issue was observed')!=-1):
+                                                        ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                        ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                        ws[nextcol1+str(j)]=ws[nextcol1+str(j)].value+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                                else:
+                                                    ws[str(chr(65+int(d)))+str(j)]='Fail'
+                                                    ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                                                    ws[nextcol1+str(j)]=ws[nextcol1+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                            else:
+                                                if (ws[nextcol1+str(j)].value=='Site ID not found') or (ws[nextcol1+str(j)].value=='') or (ws[nextcol1+str(j)].value=='None'):
+                                                    ws[nextcol1+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                                else:
+                                                    ws[nextcol1+str(j)]=ws[nextcol1+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                                ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                                ws[str(chr(65+int(d)))+str(j)].fill=orangeFill 
+                                                # ll=str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value).split(', ') #locked list
+                                                # otj='' #overdue tech join
+                                                # for il in ll:
+                                                #     if il!='5G NR25' and il!='5G NR6' and il!='GSM' and il!='U19' and il!='U21':
+                                                #         otj=', '.join([otj,il])
+                                                # otj=otj.strip(', ')
+                                                # if not otj:
+                                                #     break
+                                                # else:
+                                                #     if (ws[nextcol1+str(j)].value=='Site ID not found') or (ws[nextcol1+str(j)].value=='') or (ws[nextcol1+str(j)].value=='None'):
+                                                #         ws[nextcol1+str(j)]='KPI validation is pending as New Tech '+otj+' is locked'
+                                                #     else:
+                                                #         ws[nextcol1+str(j)]=ws[nextcol1+str(j)].value+'\n'+'KPI validation is pending as New Tech '+otj+' is locked'
+                                            for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                                ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                                ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                        # ll=str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value).split(', ') #locked list
+                        # otj='' #overdue tech join
+                        # for il in ll:
+                        #     if il!='5G NR25' and il!='5G NR6' and il!='GSM' and il!='U19' and il!='U21':
+                        #         otj=', '.join([otj,il])
+                        #         otj=otj.strip(', ')
+                        #         if not otj:
+                        #             break
+                        #         else:
+                        #             if (ws[nextcol1+str(j)].value=='Site ID not found') or (ws[nextcol1+str(j)].value=='') or (ws[nextcol1+str(j)].value=='None'):
+                        #                 ws[nextcol1+str(j)]='KPI validation is pending as New Tech '+otj+' is locked'
+                        #             else:
+                        #                 ws[nextcol1+str(j)]=ws[nextcol1+str(j)].value+'\n'+'KPI validation is pending as New Tech '+otj+' is locked'
+                                                
+                                                   
+                        elif str((df.loc[i,0]))!='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value:
+                                                ws[str(chr(65+int(d)))+str(j)]='Fail'
+                                                ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                                            else:
+                                                ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                                ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                                            for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                                ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                                ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                                                
+                        ll=str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value).split(', ') #locked list
+                        otj='' #overdue tech join
+                        for il in ll:
+                            if il!='5G NR25' and il!='5G NR6' and il!='GSM' and il!='U19' and il!='U21':
+                                otj=', '.join([otj,il])
+                        otj=otj.strip(', ')
+                        if otj=='None' or otj==None or otj=='':
+                            break
+                        else:
+                            if (ws[nextcol1+str(j)].value=='Site ID not found') or (ws[nextcol1+str(j)].value=='') or (ws[nextcol1+str(j)].value=='None'):
+                                ws[nextcol1+str(j)]='KPI validation is pending as New Tech '+otj+' is locked'
+                            else:
+                                ws[nextcol1+str(j)]=ws[nextcol1+str(j)].value+'\n'+'KPI validation is pending as New Tech '+otj+' is locked'
+            
+            
+            final_output=generate_lte_remarks(site_list,dataset3,col_dict_df)
+                
+            #print(final_output)
+            df = pd.DataFrame.from_dict(final_output, orient="Index")
+            k=''
+            for i in list(df.index):
+                for j in range(2,trows1+1):
+                    if i == ws['A'+str(j)].value:
+                        if (ws[nextcol3+str(j)].value=='Site ID not found') or (ws[nextcol3+str(j)].value=='') or (ws[nextcol3+str(j)].value=='None'): # or (ws[nextcol3+str(j)].value.find('issue was observed')!=-1):
+                            ws[nextcol3+str(j)] = str((df.loc[i,0]))
+                        else:
+                            ws[nextcol3+str(j)] = ws[nextcol3+str(j)].value+'\n'+str((df.loc[i,0]))
+                        if str((df.loc[i,0]))=='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value: #check if blank or None
+                                            # ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                            # ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                if (ws[nextcol3+str(j)].value=='Site ID not found') or (ws[nextcol3+str(j)].value=='') or (ws[nextcol3+str(j)].value=='None'):
+                                                    ws[nextcol3+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                                else:
+                                                    ws[nextcol3+str(j)]=ws[nextcol3+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                           # else:
+                                               # ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                               # ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                                               # ws[nextcol3+str(j)]='KPI validation is pending as New Tech '+str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value)+' is locked/down'
+                                           # for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                           #     ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                           #     ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                        # elif str((df.loc[i,0]))!='':
+                        #     for a,b in duration_meaning.items():
+                        #         if int(b)==file_duration:
+                        #             k=a
+                        #             for c,d in col_dict_rem.items():
+                        #                if k==c:
+                        #                    if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value:
+                        #                        ws[str(chr(65+int(d)))+str(j)]='Fail'
+                        #                        ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                        #                    else:
+                        #                        ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                        #                        ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                        #                    for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                        #                        ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                        #                        ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                        # break
+                    
+                # for k in range(2,trows2+1):
+                #     if i == ws2['A'+str(k)].value:
+                #         ws2[nextcol2+str(k)] = str((df.loc[i,0]))
+                
+            final_output=generate_lte_remarks(site_list,dataset,col_dict_df)
+                
+            #print(final_output)
+            df = pd.DataFrame.from_dict(final_output, orient="Index")
+            k=''
+            for i in list(df.index):
+                for j in range(2,trows1+1):
+                    if i == ws['A'+str(j)].value:
+                        if (ws[nextcol4+str(j)].value=='Site ID not found') or (ws[nextcol4+str(j)].value=='') or (ws[nextcol4+str(j)].value=='None'): # or (ws[nextcol4+str(j)].value.find('issue was observed')!=-1):
+                            ws[nextcol4+str(j)] = str((df.loc[i,0]))
+                        else:
+                            ws[nextcol4+str(j)] = ws[nextcol4+str(j)].value+'\n'+str((df.loc[i,0]))
+                        if str((df.loc[i,0]))=='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value: #check if blank or None
+                                                # ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                # ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                if (ws[nextcol4+str(j)].value=='Site ID not found') or (ws[nextcol4+str(j)].value=='') or (ws[nextcol4+str(j)].value=='None'):
+                                                    ws[nextcol4+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                                else:
+                                                    ws[nextcol4+str(j)]=ws[nextcol4+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no LTE issue was observed'
+                                               # else:
+                                                   # ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                                   # ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                                                   # ws[nextcol4+str(j)]='KPI validation is pending as New Tech '+str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value)+' is locked/down'
+                                               # for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                               #     ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                               #     ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                            # elif str((df.loc[i,0]))!='':
+                            #     for a,b in duration_meaning.items():
+                            #         if int(b)==file_duration:
+                            #             k=a
+                            #             for c,d in col_dict_rem.items():
+                            #                if k==c:
+                            #                    if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value:
+                            #                        ws[str(chr(65+int(d)))+str(j)]='Fail'
+                            #                        ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                            #                    else:
+                            #                        ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                            #                        ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                            #                    for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                            #                        ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                            #                        ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                            # break
+                    
+        
+        
+        if (file_name.find('FIVEG')!=-1):
+        
+            final_output=generate_5g_remarks(site_list,dataset2,col_dict_df)
+                
+            #print(final_output)
+            df = pd.DataFrame.from_dict(final_output, orient="Index")
+            k=''
+            for i in list(df.index):
+                for j in range(2,trows1+1):
+                    if i == ws['A'+str(j)].value:
+                        if (str((df.loc[i,0]))!='') and (ws[nextcol2+str(j)].value=='Site ID not found') or (ws[nextcol2+str(j)].value=='') or (ws[nextcol2+str(j)].value=='None'): # or (ws[nextcol2+str(j)].value.find('issue was observed')!=-1):
+                            ws[nextcol2+str(j)] = 'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, the following issues were observed:'
+                            ws[nextcol2+str(j)] = ws[nextcol2+str(j)].value+'\n'+str((df.loc[i,0]))
+                        if str((df.loc[i,0]))=='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value: #check if blank or None
+                                                # ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                # ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                if (ws[nextcol2+str(j)].value=='Site ID not found') or (ws[nextcol2+str(j)].value=='') or (ws[nextcol2+str(j)].value=='None'):
+                                                    ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                    ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                    ws[nextcol2+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                                elif (ws[nextcol2+str(j)].value.find('issue was observed')!=-1):
+                                                        ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                        ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                        ws[nextcol2+str(j)]=ws[nextcol2+str(j)].value+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                                else:
+                                                    ws[str(chr(65+int(d)))+str(j)]='Fail'
+                                                    ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                                                    ws[nextcol2+str(j)]=ws[nextcol2+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                            else:
+                                                if (ws[nextcol2+str(j)].value=='Site ID not found') or (ws[nextcol2+str(j)].value=='') or (ws[nextcol2+str(j)].value=='None'):
+                                                    ws[nextcol2+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                                else:
+                                                    ws[nextcol2+str(j)]=ws[nextcol2+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                                ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                                ws[str(chr(65+int(d)))+str(j)].fill=orangeFill 
+                                                # ll=str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value).split(', ') #locked list
+                                                # otj='' #overdue tech join
+                                                # for il in ll:
+                                                #     if il!='5G NR25' and il!='5G NR6' and il!='GSM' and il!='U19' and il!='U21':
+                                                #         otj=', '.join([otj,il])
+                                                # otj=otj.strip(', ')
+                                                # if not otj:
+                                                #     break
+                                                # else:
+                                                #     if (ws[nextcol2+str(j)].value=='Site ID not found') or (ws[nextcol2+str(j)].value=='') or (ws[nextcol2+str(j)].value=='None'):
+                                                #         ws[nextcol2+str(j)]='KPI validation is pending as New Tech '+otj+' is locked'
+                                                #     else:
+                                                #         ws[nextcol2+str(j)]=ws[nextcol2+str(j)].value+'\n'+'KPI validation is pending as New Tech '+otj+' is locked'
+                                            for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                                ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                                ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                        # ll=str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value).split(', ') #locked list
+                        # otj='' #overdue tech join
+                        # for il in ll:
+                        #     if il!='5G NR25' and il!='5G NR6' and il!='GSM' and il!='U19' and il!='U21':
+                        #         otj=', '.join([otj,il])
+                        #         otj=otj.strip(', ')
+                        #         if not otj:
+                        #             break
+                        #         else:
+                        #             if (ws[nextcol2+str(j)].value=='Site ID not found') or (ws[nextcol2+str(j)].value=='') or (ws[nextcol2+str(j)].value=='None'):
+                        #                 ws[nextcol2+str(j)]='KPI validation is pending as New Tech '+otj+' is locked'
+                        #             else:
+                        #                 ws[nextcol2+str(j)]=ws[nextcol2+str(j)].value+'\n'+'KPI validation is pending as New Tech '+otj+' is locked'
+                                                
+                                                   
+                        elif str((df.loc[i,0]))!='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value:
+                                                ws[str(chr(65+int(d)))+str(j)]='Fail'
+                                                ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                                            else:
+                                                ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                                ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                                            for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                                ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                                ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                                                
+                        ll=str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value).split(', ') #locked list
+                        otj='' #overdue tech join
+                        for il in ll:
+                            if il=='5G NR25' or il=='5G NR6':
+                                otj=', '.join([otj,il])
+                        otj=otj.strip(', ')
+                        if otj=='None' or otj==None or otj=='':
+                            break
+                        else:
+                            if (ws[nextcol2+str(j)].value=='Site ID not found') or (ws[nextcol2+str(j)].value=='') or (ws[nextcol2+str(j)].value=='None'):
+                                ws[nextcol2+str(j)]='KPI validation is pending as New Tech '+otj+' is locked'
+                            else:
+                                ws[nextcol2+str(j)]=ws[nextcol2+str(j)].value+'\n'+'KPI validation is pending as New Tech '+otj+' is locked'
+            
+            
+            final_output=generate_5g_remarks(site_list,dataset3,col_dict_df)
+                
+            #print(final_output)
+            df = pd.DataFrame.from_dict(final_output, orient="Index")
+            k=''
+            for i in list(df.index):
+                for j in range(2,trows1+1):
+                    if i == ws['A'+str(j)].value:
+                        if (ws[nextcol3+str(j)].value=='Site ID not found') or (ws[nextcol3+str(j)].value=='') or (ws[nextcol3+str(j)].value=='None'): # or (ws[nextcol3+str(j)].value.find('issue was observed')!=-1):
+                            ws[nextcol3+str(j)] = str((df.loc[i,0]))
+                        else:
+                            ws[nextcol3+str(j)] = ws[nextcol3+str(j)].value+'\n'+str((df.loc[i,0]))
+                        if str((df.loc[i,0]))=='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value: #check if blank or None
+                                            # ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                            # ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                if (ws[nextcol3+str(j)].value=='Site ID not found') or (ws[nextcol3+str(j)].value=='') or (ws[nextcol3+str(j)].value=='None'):
+                                                    ws[nextcol3+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                                else:
+                                                    ws[nextcol3+str(j)]=ws[nextcol3+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                           # else:
+                                               # ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                               # ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                                               # ws[nextcol3+str(j)]='KPI validation is pending as New Tech '+str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value)+' is locked/down'
+                                           # for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                           #     ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                           #     ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                        # elif str((df.loc[i,0]))!='':
+                        #     for a,b in duration_meaning.items():
+                        #         if int(b)==file_duration:
+                        #             k=a
+                        #             for c,d in col_dict_rem.items():
+                        #                if k==c:
+                        #                    if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value:
+                        #                        ws[str(chr(65+int(d)))+str(j)]='Fail'
+                        #                        ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                        #                    else:
+                        #                        ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                        #                        ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                        #                    for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                        #                        ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                        #                        ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                        # break
+                    
+                # for k in range(2,trows2+1):
+                #     if i == ws2['A'+str(k)].value:
+                #         ws2[nextcol2+str(k)] = str((df.loc[i,0]))
+                
+            final_output=generate_5g_remarks(site_list,dataset,col_dict_df)
+                
+            #print(final_output)
+            df = pd.DataFrame.from_dict(final_output, orient="Index")
+            k=''
+            for i in list(df.index):
+                for j in range(2,trows1+1):
+                    if i == ws['A'+str(j)].value:
+                        if (ws[nextcol4+str(j)].value=='Site ID not found') or (ws[nextcol4+str(j)].value=='') or (ws[nextcol4+str(j)].value=='None'): # or (ws[nextcol4+str(j)].value.find('issue was observed')!=-1):
+                            ws[nextcol4+str(j)] = str((df.loc[i,0]))
+                        else:
+                            ws[nextcol4+str(j)] = ws[nextcol4+str(j)].value+'\n'+str((df.loc[i,0]))
+                        if str((df.loc[i,0]))=='':
+                            for a,b in duration_meaning.items():
+                                if int(b)==file_duration:
+                                    k=a
+                                    for c,d in col_dict_rem.items():
+                                        if k==c:
+                                            if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value: #check if blank or None
+                                                # ws[str(chr(65+int(d)))+str(j)]='Pass'
+                                                # ws[str(chr(65+int(d)))+str(j)].fill=neongreenFill
+                                                if (ws[nextcol4+str(j)].value=='Site ID not found') or (ws[nextcol4+str(j)].value=='') or (ws[nextcol4+str(j)].value=='None'):
+                                                    ws[nextcol4+str(j)]='During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                                else:
+                                                    ws[nextcol4+str(j)]=ws[nextcol4+str(j)].value+'\n'+'During '+str(ws[str(chr((col_dict_rem['Hour'])+65))+str(j)].value)+' hour KPI validation, no 5G issue was observed'
+                                               # else:
+                                                   # ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                                                   # ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                                                   # ws[nextcol4+str(j)]='KPI validation is pending as New Tech '+str(ws[str(chr((col_dict_rem['Locked Tech'])+65))+str(j)].value)+' is locked/down'
+                                               # for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                                               #     ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                                               #     ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                            # elif str((df.loc[i,0]))!='':
+                            #     for a,b in duration_meaning.items():
+                            #         if int(b)==file_duration:
+                            #             k=a
+                            #             for c,d in col_dict_rem.items():
+                            #                if k==c:
+                            #                    if not ws[chr(col_dict_rem['Locked Tech']+65)+str(j)].value:
+                            #                        ws[str(chr(65+int(d)))+str(j)]='Fail'
+                            #                        ws[str(chr(65+int(d)))+str(j)].fill=redFill
+                            #                    else:
+                            #                        ws[str(chr(65+int(d)))+str(j)]='Overdue'
+                            #                        ws[str(chr(65+int(d)))+str(j)].fill=orangeFill
+                            #                    for pe in range(int(d)+1,col_dict_rem['KPI Next 2 Days Validated']+1):
+                            #                        ws[str(chr(65+int(pe)))+str(j)]='Pending'
+                            #                        ws[str(chr(65+int(pe)))+str(j)].fill=goldFill
+                            # break
+                    
+                # for k in range(2,trows2+1):
+                #     if i == ws2['A'+str(k)].value:
+                #         ws2[nextcol3+str(k)] = str((df.loc[i,0]))
+                #         break
+
+
+for i in list(df.index):
+    for j in range(2,trows1+1):
+        if not ws[nextcol6+str(j)].value:
+            continue
+        else:
+            ltstr=ws[nextcol6+str(j)].value #locked techs in str format
+            ltlist=ltstr.split(', ') ##locked techs in list format
+            for k in ltlist:
+                if k=='GSM' or k=='U19' or k=='U21':
+                    ltlist.remove(k)
+            ws[nextcol6+str(j)]=', '.join(ltlist)
+
+for row in ws.iter_rows():
+    for cell in row:
+        cell.alignment = Alignment(wrap_text=True,vertical='center')
+for col in ws.iter_cols():
+    for cell in col:
+        cell.alignment = Alignment(wrap_text=True,vertical='center')
+        
+wb.save(file_name_rem)
+wb.close()
+    
+print ("\n\n\t\t\t\t\t***TASK SUCCESSFULLY COMPLETED***")
+input("\n\nPress ENTER to Exit...")
